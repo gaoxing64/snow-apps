@@ -4298,6 +4298,74 @@ void pinnedDrawingToolbarMatchesCaptureInteractions(SnowCanvasRuntime&) {
             "pinned window was not deleted after the Spotlight wheel test");
 }
 
+void pinnedDrawingShortcutsToggleActiveTool() {
+    QScreen* screen = QGuiApplication::primaryScreen();
+    require(screen != nullptr, "a primary screen is required");
+    auto* window = new ScreenshotPinnedWindow();
+    QPointer<ScreenshotPinnedWindow> guardedWindow(window);
+    QImage background(320, 180, QImage::Format_ARGB32_Premultiplied);
+    background.fill(Qt::white);
+    ScreenshotPinnedWindow::Config config;
+    config.nativeGeometry = physicalPinGeometry(*screen, QPoint(40, 40), background.size());
+    config.canvasSourceRect = QRectF(QPointF(), QSizeF(background.size()));
+    config.imageSource = ScreenshotImageSource::fromImage(background, config.canvasSourceRect);
+    config.screen = screen;
+    config.enableEditing = true;
+    require(window->present(config), "shortcut test pin presentation failed");
+    auto* editButton = buttonNamed(*window, QStringLiteral("Enable drawing mode"));
+    require(editButton != nullptr, "drawing mode button was not found");
+    editButton->click();
+    QCoreApplication::processEvents();
+
+    auto* canvas = window->findChild<SnowCanvasWidget*>();
+    auto* controller = window->findChild<ScreenshotPinnedEditController*>();
+    require(canvas != nullptr && controller != nullptr && controller->toolbarWindow() != nullptr,
+            "drawing shortcut fixture should expose a canvas and toolbar");
+    auto* palette = controller->toolbarWindow()->palette();
+    require(palette != nullptr, "drawing shortcut fixture should expose its palette");
+    const auto pressKey = [canvas](Qt::Key key) {
+        QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
+        QCoreApplication::sendEvent(canvas, &press);
+        QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
+        QCoreApplication::sendEvent(canvas, &release);
+    };
+    for (const auto& [key, tool] : {std::pair{Qt::Key_P, SnowCanvasTool::FreeDraw},
+                                    std::pair{Qt::Key_1, SnowCanvasTool::Shape}}) {
+        pressKey(key);
+        require(canvas->canvasTool() == tool,
+                "the first shortcut press should activate the pinned canvas tool");
+        pressKey(key);
+        require(canvas->canvasTool() == SnowCanvasTool::Select &&
+                    palette->activeToolForTests() == ScreenshotToolPalette::Tool::Select,
+                "the second shortcut press should return both canvas and toolbar to Select");
+        pressKey(key);
+        require(canvas->canvasTool() == tool,
+                "the third shortcut press should reactivate the pinned canvas tool");
+    }
+    require(canvas->setCanvasTool(SnowCanvasTool::Shape), "reset fixture should activate Shape");
+    QMouseEvent down(QEvent::MouseButtonPress, QPointF(30, 30), QPointF(30, 30), Qt::LeftButton,
+                     Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent move(QEvent::MouseMove, QPointF(90, 90), QPointF(90, 90), Qt::NoButton,
+                     Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent up(QEvent::MouseButtonRelease, QPointF(90, 90), QPointF(90, 90), Qt::LeftButton,
+                   Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(canvas, &down);
+    QCoreApplication::sendEvent(canvas, &move);
+    QCoreApplication::sendEvent(canvas, &up);
+    require(canvas->canvasHistoryState().canUndo, "pinned reset fixture should contain an edit");
+    require(canvas->resetEditingState(), "pinned reset fixture should clear selection");
+    palette->setActiveTool(ScreenshotToolPalette::Tool::Select);
+    auto* reset =
+        palette->findChild<adqt::widgets::AdButton*>(QStringLiteral("screenshotResetCanvasButton"));
+    require(reset != nullptr && reset->isEnabled(),
+            "pinned canvas reset should be enabled without selection");
+    reset->click();
+    require(!canvas->canvasHistoryState().canUndo && !canvas->canvasHistoryState().canRedo,
+            "pinned reset should clear the canvas document and history");
+    window->close();
+    require(processUntilDeleted(guardedWindow, 2000), "shortcut test pin should close");
+}
+
 void pinnedEditToolbarControlsCanvasHistory(SnowCanvasRuntime&) {
     QScreen* screen = QGuiApplication::primaryScreen();
     require(screen != nullptr, "a primary screen is required");
@@ -4627,6 +4695,10 @@ int main(int argc, char* argv[]) {
             pinnedMovementShortcutsMoveIdleWindow();
             return 0;
         }
+        if (app.arguments().contains(QStringLiteral("--drawing-shortcut-toggle-only"))) {
+            pinnedDrawingShortcutsToggleActiveTool();
+            return 0;
+        }
         if (app.arguments().contains(QStringLiteral("--toolbar-lifecycle-only"))) {
             pinnedEditToolbarControlsCanvasHistory(sourceRuntime);
             return 0;
@@ -4758,6 +4830,7 @@ int main(int argc, char* argv[]) {
         pinnedThumbnailUsesOpaqueThemeBackground(sourceRuntime);
         pinnedControlsHideBelowMinimumNativeSize(sourceRuntime);
         pinnedLargeImageRemainsOpenWhenEnteringDrawingMode(sourceRuntime);
+        pinnedDrawingShortcutsToggleActiveTool();
         pinnedEditToolbarControlsCanvasHistory(sourceRuntime);
         pinnedDrawingToolbarMatchesCaptureInteractions(sourceRuntime);
 
