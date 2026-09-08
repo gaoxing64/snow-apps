@@ -882,6 +882,7 @@ set(PROJECT_CXX_SOURCES
     src/app/singleinstancecoordinator.cpp
     src/platform/physicalcursor.cpp
     src/platform/windows/windowchrome.cpp
+    src/platform/windows/scrollinput.cpp
     src/presentation/components/contentcardwidget.cpp
     src/presentation/components/maincontentheaderwidget.cpp
     src/presentation/components/sidebarwidget.cpp
@@ -2203,6 +2204,17 @@ if(SNOW_SHOT_BUILD_TESTS)
         tests/scrolling_capture_cadence_tests.cpp
         src/presentation/capture/adaptivescrollingcapturecadence.h
     )
+    add_executable(snow-shot-scrolling-auto-scroll-tests
+        tests/scrolling_auto_scroll_tests.cpp
+        src/platform/windows/scrollinput.cpp
+    )
+    target_include_directories(snow-shot-scrolling-auto-scroll-tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    )
+    target_link_libraries(snow-shot-scrolling-auto-scroll-tests PRIVATE Qt6::Core Qt6::Gui)
+    add_test(NAME snow-shot-scrolling-auto-scroll-tests
+        COMMAND snow-shot-scrolling-auto-scroll-tests)
     target_include_directories(snow-shot-scrolling-capture-cadence-tests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
     )
@@ -3298,6 +3310,19 @@ if(SNOW_SHOT_BUILD_TESTS)
         ENVIRONMENT_MODIFICATION
             "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
     )
+
+    add_executable(snow-shot-screenshot-recording-workflow-tests
+        tests/screenshot_recording_workflow_tests.cpp
+    )
+    target_link_libraries(snow-shot-screenshot-recording-workflow-tests PRIVATE Qt6::Core)
+    add_test(NAME snow-shot-screenshot-recording-workflow-tests
+        COMMAND snow-shot-screenshot-recording-workflow-tests)
+    set_tests_properties(snow-shot-screenshot-recording-workflow-tests PROPERTIES
+        LABELS "unit" TIMEOUT 30)
+    if(WIN32)
+        set_tests_properties(snow-shot-screenshot-recording-workflow-tests PROPERTIES
+            ENVIRONMENT "PATH=$<TARGET_FILE_DIR:Qt6::Core>\;$ENV{PATH}")
+    endif()
 
     add_executable(snow-shot-screen-recording-geometry-tests
         tests/screen_recording_geometry_tests.cpp
